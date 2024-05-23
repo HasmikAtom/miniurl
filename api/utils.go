@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 )
 
@@ -16,14 +15,16 @@ func GetEnvVars() *EnvVars {
 		domain = "localhost:" + port
 	}
 
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		log.Fatal("DATABASE_URL unset")
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
 	}
+	redisPass := os.Getenv("REDIS_PASS")
 
 	return &EnvVars{
-		Domain:      domain,
-		Port:        port,
-		DatabaseURL: databaseURL,
+		Domain:    domain,
+		Port:      port,
+		RedisAddr: redisAddr,
+		RedisPass: redisPass,
 	}
 }

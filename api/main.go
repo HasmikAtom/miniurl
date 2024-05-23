@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	redisdb "github.com/HasmikAtom/miniurl/redis"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"net/http"
 )
@@ -14,14 +16,14 @@ type App struct {
 	Ctx        context.Context
 	DotEnvFile string
 	EnvVars    EnvVars
-	//Database   *database.Database
 	// logging    *Logging
 }
 
 type EnvVars struct {
-	Port        string
-	Domain      string
-	DatabaseURL string
+	Port      string
+	Domain    string
+	RedisAddr string
+	RedisPass string
 }
 
 type UrlShortenRequest struct {
@@ -67,6 +69,7 @@ func main() {
 func handlers(app *App) *mux.Router {
 	router := mux.NewRouter()
 	router.HandleFunc("/api/shorten", app.shortenUrl).Methods("POST")
+	router.HandleFunc("/api/{short}", app.shortenUrl).Methods("POST")
 
 	return router
 }
@@ -92,6 +95,24 @@ func (app *App) shortenUrl(response http.ResponseWriter, request *http.Request) 
 	json.NewEncoder(response).Encode(res)
 }
 
-func getOriginalUrl(response http.ResponseWriter, request *http.Request) {
+func (app *App) getOriginalUrl(response http.ResponseWriter, request *http.Request) {
+	short := mux.Vars(request)["short"]
 
+	r := redisdb.CreateRedisClient(0)
+	defer r.Close()
+
+	fullUrl, err := r.Get(redisdb.Ctx, short).Result()
+	if err == redis.Nil {
+		// short not found in db
+	} else if err != nil {
+		// cannot connect to db
+	}
+
+	rInr := redisdb.CreateRedisClient(1)
+	defer rInr.Close()
+
+	_ = rInr.Incr(redisdb.Ctx, "counter")
+
+	response.WriteHeader(http.StatusPermanentRedirect)
+	json.NewEncoder(response).Encode(fullUrl)
 }
