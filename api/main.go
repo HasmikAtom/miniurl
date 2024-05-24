@@ -10,12 +10,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"log"
 	"net/http"
+	"time"
 )
 
 type App struct {
-	Ctx        context.Context
-	DotEnvFile string
-	EnvVars    EnvVars
+	Ctx              context.Context
+	DotEnvFile       string
+	EnvVars          EnvVars
+	DefaultUrlExpiry time.Duration
 	// logging    *Logging
 }
 
@@ -27,7 +29,8 @@ type EnvVars struct {
 }
 
 type UrlShortenRequest struct {
-	Url string `json:"url"`
+	Url    string        `json:"url"`
+	Expiry time.Duration `json:"expiry"`
 }
 type UrlShortenResponse struct {
 	ShortUrl string `json:"shortUrl"`
@@ -54,8 +57,9 @@ func main() {
 
 	envVars := GetEnvVars()
 	app := &App{
-		Ctx:     ctx,
-		EnvVars: *envVars,
+		Ctx:              ctx,
+		EnvVars:          *envVars,
+		DefaultUrlExpiry: 24,
 	}
 	http.Handle("/", handlers(app))
 	log.Printf("Server Running on port :" + envVars.Port)
@@ -85,6 +89,19 @@ func (app *App) shortenUrl(response http.ResponseWriter, request *http.Request) 
 	}
 
 	urlId := uuid.New().String()[:8]
+
+	if body.Expiry == 0 {
+		body.Expiry = app.DefaultUrlExpiry
+	}
+
+	r := redisdb.CreateRedisClient(0)
+	defer r.Close()
+
+	err = r.Set(redisdb.Ctx, urlId, body.Url, body.Expiry*3600*time.Second).Err()
+	if err != nil {
+		response.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(response).Encode([]byte("Error saving the url"))
+	}
 
 	res := &UrlShortenResponse{
 		ShortUrl: app.EnvVars.Domain + "/" + urlId,
