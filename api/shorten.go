@@ -20,6 +20,13 @@ func (app *App) shortenUrl(response http.ResponseWriter, request *http.Request) 
 		log.Printf("Error decoding json =>", err)
 	}
 
+	if !ValidDomain(body.Url, app.EnvVars.Domain) {
+		response.Header().Set("Content-Type", "application/json")
+		response.WriteHeader(http.StatusServiceUnavailable)
+		response.Write([]byte(`{"Error": "invalid url"}`))
+		return
+	}
+
 	ipAddress := GetIpAddress(request)
 
 	r2 := redisdb.CreateRedisClient(1)
@@ -31,8 +38,10 @@ func (app *App) shortenUrl(response http.ResponseWriter, request *http.Request) 
 		val, _ = r2.Get(redisdb.Ctx, ipAddress).Result()
 		valInt, _ := strconv.Atoi(val)
 		if valInt <= 0 {
+			response.Header().Set("Content-Type", "application/json")
 			response.WriteHeader(http.StatusServiceUnavailable)
 			response.Write([]byte(`{"Error": "Rate Limit exceeded"}`))
+			return
 		}
 	}
 

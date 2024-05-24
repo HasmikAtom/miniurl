@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -67,4 +68,20 @@ func GetIpAddress(request *http.Request) string {
 	}
 
 	return ipAddress
+}
+func ValidDomain(url, currentDomain string) bool {
+
+	if url == currentDomain {
+		return false
+	}
+	newURL := strings.Replace(url, "http://", "", 1)
+	newURL = strings.Replace(newURL, "https://", "", 1)
+	newURL = strings.Replace(newURL, "www.", "", 1)
+	newURL = strings.Split(newURL, "/")[0]
+
+	if newURL == currentDomain {
+		return false
+	}
+	return true
+
 }
