@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	redisdb "github.com/HasmikAtom/miniurl/redis"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -33,7 +34,8 @@ type UrlShortenRequest struct {
 	Expiry time.Duration `json:"expiry"`
 }
 type UrlShortenResponse struct {
-	ShortUrl string `json:"shortUrl"`
+	ShortUrl string        `json:"shortUrl"`
+	Expiry   time.Duration `json:"expiry"`
 }
 
 type GetOriginalUrlRequest struct {
@@ -73,7 +75,7 @@ func main() {
 func handlers(app *App) *mux.Router {
 	router := mux.NewRouter()
 	router.HandleFunc("/api/shorten", app.shortenUrl).Methods("POST")
-	router.HandleFunc("/api/{short}", app.shortenUrl).Methods("POST")
+	router.HandleFunc("/{short}", app.getOriginalUrl).Methods("GET")
 
 	return router
 }
@@ -87,6 +89,8 @@ func (app *App) shortenUrl(response http.ResponseWriter, request *http.Request) 
 	if err != nil {
 		log.Printf("Error decoding json =>", err)
 	}
+
+	body.Url = EnforceHTTP(body.Url)
 
 	urlId := uuid.New().String()[:8]
 
@@ -105,6 +109,7 @@ func (app *App) shortenUrl(response http.ResponseWriter, request *http.Request) 
 
 	res := &UrlShortenResponse{
 		ShortUrl: app.EnvVars.Domain + "/" + urlId,
+		Expiry:   body.Expiry,
 	}
 
 	response.Header().Set("Content-Type", "application/json")
@@ -125,11 +130,12 @@ func (app *App) getOriginalUrl(response http.ResponseWriter, request *http.Reque
 		// cannot connect to db
 	}
 
+	fmt.Println("FULL URL", fullUrl)
+
 	rInr := redisdb.CreateRedisClient(1)
 	defer rInr.Close()
 
 	_ = rInr.Incr(redisdb.Ctx, "counter")
 
-	response.WriteHeader(http.StatusPermanentRedirect)
-	json.NewEncoder(response).Encode(fullUrl)
+	http.Redirect(response, request, fullUrl, http.StatusFound)
 }
